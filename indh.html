@@ -320,7 +320,7 @@ function startSimulation() {
     let requests = reqInput.split(",").map(n => parseInt(n.trim())).filter(n => !isNaN(n));
 
     if (requests.length === 0) {
-        alert("Invalid request queue");
+        alert("Invalid request queue!");
         return;
     }
 
