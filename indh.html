@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DiskForge - Disk Scheduling Simulator</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        :root {
+            --primary: #22c55e;
+            --accent: #22d3ee;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            transition: all 0.2s ease;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #020617 100%);
+            color: #e2e8f0;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(12px);
+            padding: 16px 24px;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -1px;
+            color: #22c55e;
+        }
+
+        .main-container {
+            display: flex;
+            height: calc(100vh - 64px);
+        }
+
+        .sidebar {
+            width: 290px;
+            background: rgba(30, 41, 59, 0.95);
+            padding: 24px;
+            border-right: 1px solid #334155;
+            overflow-y: auto;
+        }
+
+        .content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        h1, h2, h3 {
+            margin-bottom: 12px;
+            color: #cbd5e1;
+        }
+
+        input, button {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 8px;
+            border: none;
+        }
+
+        input {
+            background: #1e2937;
+            color: white;
+            border: 1px solid #475569;
+        }
+
+        button {
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-run { background: #22c55e; color: #052e16; }
+        .btn-pause { background: #eab308; color: #3f2a00; }
+        .btn-reset { background: #ef4444; color: white; }
+        .btn-random { background: #64748b; color: white; }
+
+        .card {
+            background: #1e2937;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            border-top: 4px solid;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .canvas-box {
+            background: #1e2937;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
+        #chart { height: 210px !important; }
+        #compareChart { height: 160px !important; }
+
+        .output {
+            background: #0f172a;
+            border-radius: 12px;
+            padding: 16px;
+            font-family: monospace;
+            font-size: 0.92rem;
+            max-height: 310px;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+
+        .ranking {
+            background: #1e2937;
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .split {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+        }
+
+        /* Small personal touch */
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <i class="fa-solid fa-hard-drive" style="font-size:32px; color:#22c55e;"></i>
+    <div class="logo">DiskForge</div>
+    <div style="margin-left:auto; font-size:14px; opacity:0.8;">OS Lab Project</div>
+</header>
+
+<div class="main-container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h2><i class="fa-solid fa-sliders"></i> Controls</h2>
+        
+        <div>
+            <label style="display:block; margin:10px 0 5px; font-size:13px;">Request Queue</label>
+            <input id="requests" type="text" value="98,183,37,122,14,124,65,67">
+        </div>
+
+        <div>
+            <label style="display:block; margin:10px 0 5px; font-size:13px;">Initial Head Position</label>
+            <input id="head" type="number" value="53">
+        </div>
+
+        <button class="btn-run" onclick="startSimulation()">
+            <i class="fa-solid fa-play"></i> Run Simulation
+        </button>
+        <button class="btn-pause" id="pauseBtn" onclick="togglePause()">
+            <i class="fa-solid fa-pause"></i> Pause Animation
+        </button>
+        <button class="btn-reset" onclick="resetAll()">
+            <i class="fa-solid fa-rotate"></i> Reset Everything
+        </button>
+        <button class="btn-random" onclick="randomData()">
+            <i class="fa-solid fa-dice"></i> Load Random Data
+        </button>
+
+        <div style="margin-top:20px;">
+            <label style="font-size:13px;">Animation Speed: <span id="speedVal">300</span> ms</label>
+            <input type="range" id="speed" min="50" max="800" value="300" oninput="updateSpeed(this.value)">
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="content">
+        <div class="cards">
+            <div class="card" id="fcfsCard" style="border-color: #22d3ee;">
+                <h3>FCFS</h3>
+                <div id="fcfsSeek" style="font-size: 2.4rem; font-weight: bold; color: #22d3ee;">—</div>
+            </div>
+            <div class="card" id="sstfCard" style="border-color: #eab308;">
+                <h3>SSTF</h3>
+                <div id="sstfSeek" style="font-size: 2.4rem; font-weight: bold; color: #eab308;">—</div>
+            </div>
+            <div class="card" id="scanCard" style="border-color: #22c55e;">
+                <h3>SCAN</h3>
+                <div id="scanSeek" style="font-size: 2.4rem; font-weight: bold; color: #22c55e;">—</div>
+            </div>
+            <div class="card" id="cscanCard" style="border-color: #c026d3;">
+                <h3>C-SCAN</h3>
+                <div id="cscanSeek" style="font-size: 2.4rem; font-weight: bold; color: #c026d3;">—</div>
+            </div>
+        </div>
+
+        <div class="canvas-box">
+            <h3>Real-time Head Movement</h3>
+            <canvas id="chart"></canvas>
+        </div>
+
+        <div class="split">
+            <div>
+                <h3>Detailed Output</h3>
+                <div class="output" id="output"></div>
+            </div>
+            <div>
+                <h3>Ranking</h3>
+                <div class="ranking" id="ranking"></div>
+            </div>
+        </div>
+
+        <div class="canvas-box">
+            <h3>Seek Time Comparison</h3>
+            <canvas id="compareChart"></canvas>
+        </div>
+
+        <div class="footer">
+            Made for Operating Systems Lab • 2026
+        </div>
+    </div>
+</div>
+
+<script>
+// Disk Scheduling Simulator
+// OS Lab Project
+
+const DISK_SIZE = 199;
+
+function fcfs(req, head) {
+    let seq = [head], total = 0;
+    req.forEach(r => {
+        total += Math.abs(head - r);
+        head = r;
+        seq.push(r);
+    });
+    return [seq, total];
+}
+
+function sstf(req, head) {
+    let rem = [...req];
+    let seq = [head];
+    let total = 0;
+    while (rem.length) {
+        let closest = rem.reduce((a, b) => Math.abs(b - head) < Math.abs(a - head) ? b : a);
+        total += Math.abs(head - closest);
+        head = closest;
+        seq.push(closest);
+        rem.splice(rem.indexOf(closest), 1);
+    }
+    return [seq, total];
+}
+
+function scan(req, head) {
+    let sorted = [...req].sort((a,b) => a - b);
+    let left = sorted.filter(x => x < head);
+    let right = sorted.filter(x => x >= head);
+    let seq = [head], total = 0;
+
+    right.forEach(r => { total += Math.abs(head - r); head = r; seq.push(r); });
+    left.reverse().forEach(r => { total += Math.abs(head - r); head = r; seq.push(r); });
+
+    return [seq, total];
+}
+
+function cscan(req, head) {
+    let sorted = [...req].sort((a,b) => a - b);
+    let left = sorted.filter(x => x < head);
+    let right = sorted.filter(x => x >= head);
+    let seq = [head], total = 0;
+
+    right.forEach(r => { total += Math.abs(head - r); head = r; seq.push(r); });
+    if (right.length) {
+        total += Math.abs(head - DISK_SIZE);
+        head = DISK_SIZE;
+        seq.push(head);
+    }
+    total += Math.abs(head - 0);
+    head = 0;
+    seq.push(head);
+    left.forEach(r => { total += Math.abs(head - r); head = r; seq.push(r); });
+
+    return [seq, total];
+}
+
+// Global variables
+let myChart, compareChart, animInterval = null;
+let currentStep = 0;
+let simulationResults = {};
+let animSpeed = 300;
+
+// Start Simulation
+function startSimulation() {
+    let reqInput = document.getElementById("requests").value.trim();
+    let headPos = parseInt(document.getElementById("head").value) || 53;
+
+    if (!reqInput) {
+        alert("Please enter request queue");
+        return;
+    }
+
+    let requests = reqInput.split(",").map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+
+    if (requests.length === 0) {
+        alert("Invalid request queue");
+        return;
+    }
+
+    simulationResults = {
+        FCFS: fcfs(requests, headPos),
+        SSTF: sstf(requests, headPos),
+        SCAN: scan(requests, headPos),
+        CSCAN: cscan(requests, headPos)
+    };
+
+    updateCards();
+    showDetailedOutput();
+    showRanking();
+    drawComparisonChart();
+    initMainChart();
+    currentStep = 0;
+    startAnimation();
+}
+
+function updateCards() {
+    document.getElementById("fcfsSeek").textContent = simulationResults.FCFS[1];
+    document.getElementById("sstfSeek").textContent = simulationResults.SSTF[1];
+    document.getElementById("scanSeek").textContent = simulationResults.SCAN[1];
+    document.getElementById("cscanSeek").textContent = simulationResults.CSCAN[1];
+}
+
+function showDetailedOutput() {
+    let html = "";
+    const colors = { FCFS: "#22d3ee", SSTF: "#eab308", SCAN: "#22c55e", CSCAN: "#c026d3" };
+
+    for (let algo in simulationResults) {
+        let [seq, totalSeek] = simulationResults[algo];
+        let moves = seq.length - 1;
+        let avgSeek = moves > 0 ? (totalSeek / moves).toFixed(2) : "0.00";
+        let throughput = moves > 0 ? (moves / totalSeek * 1000).toFixed(2) : "0.00";
+
+        html += `
+            <div style="margin-bottom:18px; padding:12px; background:#1e2937; border-radius:8px; border-left:4px solid ${colors[algo]};">
+                <strong style="color:${colors[algo]};">${algo}</strong><br>
+                <span style="font-size:0.9rem; opacity:0.9;">${seq.join(" → ")}</span><br><br>
+                Total Seek: <strong>${totalSeek}</strong> ms<br>
+                Avg Seek: <strong>${avgSeek}</strong> ms<br>
+                Throughput: <strong>${throughput}</strong> req/sec
+            </div>`;
+    }
+    document.getElementById("output").innerHTML = html;
+}
+
+function showRanking() {
+    let sorted = Object.entries(simulationResults).sort((a,b) => a[1][1] - b[1][1]);
+    let html = "";
+    sorted.forEach(([algo, data], index) => {
+        html += `
+            <div style="margin:12px 0;">
+                <div style="display:flex; justify-content:space-between;">
+                    <span>${index+1}. ${algo}</span>
+                    <span>${data[1]} ms</span>
+                </div>
+            </div>`;
+    });
+    document.getElementById("ranking").innerHTML = html;
+}
+
+function drawComparisonChart() {
+    if (compareChart) compareChart.destroy();
+    const ctx = document.getElementById("compareChart").getContext("2d");
+    compareChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(simulationResults),
+            datasets: [{
+                label: 'Seek Time (ms)',
+                data: Object.values(simulationResults).map(r => r[1]),
+                backgroundColor: ['#22d3ee', '#eab308', '#22c55e', '#c026d3']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } }
+        }
+    });
+}
+
+function initMainChart() {
+    if (myChart) myChart.destroy();
+    const ctx = document.getElementById("chart").getContext("2d");
+    myChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [
+            { label: 'FCFS', borderColor: '#22d3ee', data: [], borderWidth: 3 },
+            { label: 'SSTF', borderColor: '#eab308', data: [], borderWidth: 3 },
+            { label: 'SCAN', borderColor: '#22c55e', data: [], borderWidth: 3 },
+            { label: 'C-SCAN', borderColor: '#c026d3', data: [], borderWidth: 3 }
+        ]},
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'top' } }
+        }
+    });
+}
+
+function startAnimation() {
+    if (animInterval) clearInterval(animInterval);
+    const maxSteps = Math.max(...Object.values(simulationResults).map(r => r[0].length));
+
+    animInterval = setInterval(() => {
+        if (currentStep >= maxSteps) {
+            clearInterval(animInterval);
+            return;
+        }
+        myChart.data.labels.push(currentStep);
+        ["FCFS","SSTF","SCAN","CSCAN"].forEach((algo, i) => {
+            if (currentStep < simulationResults[algo][0].length) {
+                myChart.data.datasets[i].data.push(simulationResults[algo][0][currentStep]);
+            }
+        });
+        myChart.update('none');
+        currentStep++;
+    }, animSpeed);
+}
+
+function togglePause() {
+    const btn = document.getElementById("pauseBtn");
+    if (animInterval) {
+        clearInterval(animInterval);
+        animInterval = null;
+        btn.innerHTML = `<i class="fa-solid fa-play"></i> Resume`;
+    } else {
+        startAnimation();
+        btn.innerHTML = `<i class="fa-solid fa-pause"></i> Pause Animation`;
+    }
+}
+
+function resetAll() {
+    if (animInterval) clearInterval(animInterval);
+    if (myChart) myChart.destroy();
+    if (compareChart) compareChart.destroy();
+    document.getElementById("output").innerHTML = "";
+    document.getElementById("ranking").innerHTML = "";
+    document.getElementById("fcfsSeek").textContent = "—";
+    document.getElementById("sstfSeek").textContent = "—";
+    document.getElementById("scanSeek").textContent = "—";
+    document.getElementById("cscanSeek").textContent = "—";
+    currentStep = 0;
+}
+
+function randomData() {
+    const count = Math.floor(Math.random() * 6) + 5;
+    let reqs = [];
+    for (let i = 0; i < count; i++) {
+        reqs.push(Math.floor(Math.random() * 180) + 10);
+    }
+    document.getElementById("requests").value = reqs.join(",");
+    document.getElementById("head").value = Math.floor(Math.random() * 150) + 20;
+    startSimulation();
+}
+
+function updateSpeed(val) {
+    animSpeed = parseInt(val);
+    document.getElementById("speedVal").textContent = val;
+}
+</script>
+</body>
+</html>
